@@ -29,35 +29,6 @@ call -- and relays what it sees through sound:
 - **Stays silent when you're the speaker**, if the call app labels your own
   tile with a "(you)" marker (see Named speakers).
 
-## Menu bar app
-
-`app.py` wraps all of the above into a small menu bar icon with global
-hotkeys, so it can run in the background during a real meeting without ever
-needing a Terminal window in focus:
-
-```bash
-python app.py --source window --app zoom.us
-```
-
-- **Option+Space** -- start narrating in the background
-- **Option+Q** -- stop
-- Everything is also spoken and confirmed out loud: on launch, "Narrator is
-  ready. Press option space to start. Press option q to stop."; on start,
-  "Accessibility descriptions enabled."; on stop, a spoken confirmation too --
-  so none of this requires looking at the menu bar.
-- The icon (an ear, plus a green dot while active) also has Start/Stop/Quit
-  items for anyone who prefers clicking.
-- `--app`, `--source`, `--camera-index`, and `--name` all work the same as
-  the CLI script (see Named speakers above); defaults to
-  `--source window --app zoom.us`.
-
-**One extra permission**: global hotkeys need macOS's **Accessibility**
-permission (System Settings > Privacy & Security > Accessibility) granted to
-whatever runs `python app.py` (Terminal, iTerm, etc.) -- separate from the
-Camera/Screen Recording permissions below. Without it, the app still runs and
-speaks its opening prompt, but Option+Space/Option+Q won't be received; use
-the menu's Start/Stop items instead, or grant the permission and relaunch.
-
 ## Setup
 
 ```bash

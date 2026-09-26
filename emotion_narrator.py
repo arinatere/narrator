@@ -9,7 +9,6 @@ is ignored -- see README.md for the Gallery View caveat and setup/permissions.
 """
 
 import argparse
-import threading
 import time
 
 import cv2
@@ -87,13 +86,11 @@ def run_enroll(args):
     print(f"Enrolled '{args.enroll}'. Known speakers: {', '.join(people.known_names())}")
 
 
-def run_narrator(args, stop_event=None):
-    """Runs the detection loop until `stop_event` is set (or, with no window
-    and no stop_event, until Ctrl+C). Used both by the CLI entry point below
-    and by app.py, which runs this in a background thread controlled by
-    global hotkeys."""
-    if stop_event is None:
-        stop_event = threading.Event()
+def main():
+    args = parse_args()
+    if args.enroll:
+        run_enroll(args)
+        return
 
     cap = make_capture(args)
     identifier = people.Identifier()
@@ -124,7 +121,7 @@ def run_narrator(args, stop_event=None):
         print("Press 'q' in the video window to quit.")
 
     try:
-        while not stop_event.is_set():
+        while True:
             ret, frame = cap.read()
             if not ret:
                 print("Could not read a frame from the source.")
@@ -220,14 +217,6 @@ def run_narrator(args, stop_event=None):
         cap.release()
         if not args.headless:
             cv2.destroyAllWindows()
-
-
-def main():
-    args = parse_args()
-    if args.enroll:
-        run_enroll(args)
-        return
-    run_narrator(args)
 
 
 if __name__ == "__main__":
