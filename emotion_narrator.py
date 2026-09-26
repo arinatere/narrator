@@ -15,6 +15,7 @@ import cv2
 from deepface import DeepFace
 
 import audio_cues
+import ocr
 import people
 from capture import WebcamCapture, WindowCapture
 
@@ -106,9 +107,12 @@ def main():
     last_speak_time = 0
 
     print("(First run may take ~30 seconds while DeepFace downloads its model)")
+    if args.source == "window":
+        print("Reading on-screen name labels for identification (falls back to "
+              "enrolled faces, then --name, if no label is found nearby).")
     if identifier.has_known_faces():
         print(f"Known speakers: {', '.join(people.known_names())}")
-    else:
+    elif args.source != "window":
         print("No speakers enrolled yet -- run with --enroll NAME to add one. "
               f"Unrecognized speakers will be called '{args.name}'.")
     if args.headless:
@@ -149,13 +153,27 @@ def main():
                         # the listener has no way to visually double-check.
                         current_emotion = None
                     else:
-                        current_emotion = dominant
-                        current_confidence = speaker['emotion'][dominant]
-                        if identifier.has_known_faces():
-                            matched_name = identifier.identify(crop_region(frame, speaker['region']))
-                            current_subject = matched_name if matched_name else args.name
+                        ocr_name, is_self = (None, False)
+                        if args.source == "window":
+                            # Call apps overlay each participant's display name on
+                            # their tile -- read it directly instead of requiring
+                            # manual enrollment. A "(you)" label means this tile is
+                            # the local user, who doesn't need their own expression
+                            # narrated back to them.
+                            ocr_name, is_self = ocr.find_name_near_face(frame, speaker['region'])
+
+                        if is_self:
+                            current_emotion = None
                         else:
-                            current_subject = args.name
+                            current_emotion = dominant
+                            current_confidence = speaker['emotion'][dominant]
+                            if ocr_name:
+                                current_subject = ocr_name
+                            elif identifier.has_known_faces():
+                                matched_name = identifier.identify(crop_region(frame, speaker['region']))
+                                current_subject = matched_name if matched_name else args.name
+                            else:
+                                current_subject = args.name
                     last_box = speaker['region']
                 except Exception as e:
                     current_emotion = None

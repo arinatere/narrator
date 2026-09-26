@@ -21,11 +21,13 @@ call -- and relays what it sees through sound:
   stands out from routine happy/neutral drift -- similar in spirit to
   noticing when an AI agent needs your attention.
 - A **spoken sentence** ("Alex looks happy") after the earcon, for full detail
-  -- using a real enrolled name when the speaker is recognized (see Named
-  speakers below), or a fallback label otherwise.
+  -- naming the speaker using whatever name the call app already displays on
+  their tile (see Named speakers below), or a fallback label otherwise.
 - **Speaker focus** in multi-person calls: the largest detected face is treated
   as the active speaker and everyone else is ignored, so a busy call doesn't
   turn into a wall of narration.
+- **Stays silent when you're the speaker**, if the call app labels your own
+  tile with a "(you)" marker (see Named speakers).
 
 ## Setup
 
@@ -66,17 +68,24 @@ with any video call app without API keys or app review.
   terminal (or the app running Python), then restart the script.
 
 ### Named speakers
-By default the narration calls whoever it detects "The speaker". To get real
-names, enroll each person once -- point the source at their face (e.g. while
-they're the visible speaker in the call), then:
+In `--source window` mode, narration reads the participant name Zoom/Teams
+already display under the active speaker's tile -- via on-device OCR (macOS's
+Vision framework, no cloud calls, no extra model download) -- so no setup is
+needed for this to say real names. If the call app marks your own tile "Name
+(You)", that tile is recognized as you and stays silent instead of narrating
+your own expression back to you.
+
+If a name label can't be read (covered, too small, an app that doesn't show
+one), it falls back to face enrollment: point the source at someone's face
+once and register them by name --
 ```bash
 python emotion_narrator.py --source window --app zoom.us --enroll Alex
 ```
 This grabs a reference frame, stores a face embedding for "Alex" locally in
 `known_faces.json` (never committed -- it's gitignored, since it's personal
-biometric data), and exits. Repeat for each person you want recognized. On
-future runs, any detected speaker matching an enrolled face is called by that
-name; an unrecognized speaker falls back to `--name <label>` (default: "The
+biometric data), and exits. On future runs, a detected speaker matching an
+enrolled face is called by that name. If neither an on-screen label nor an
+enrollment matches, it falls back to `--name <label>` (default: "The
 speaker").
 ```bash
 python emotion_narrator.py --source window --app zoom.us --headless
@@ -106,14 +115,21 @@ python emotion_narrator.py --source window --app zoom.us --headless
 - Tuning constants (`FRAME_SKIP`, `HOLD_SECONDS`, `COOLDOWN_SECONDS`,
   `MIN_FACE_CONFIDENCE`) are at the top of `emotion_narrator.py`.
 - Earcon waveforms and the concerning-emotion set live in `audio_cues.py`;
-  capture logic lives in `capture.py`; face enrollment/identification lives
-  in `people.py` (embeddings via DeepFace's Facenet model, matched by cosine
-  distance -- no extra dependencies).
+  capture logic lives in `capture.py`; on-screen name-label reading lives in
+  `ocr.py` (macOS Vision framework); face enrollment/identification (the
+  fallback when no label is found) lives in `people.py` (embeddings via
+  DeepFace's Facenet model, matched by cosine distance). None of this needs
+  extra model downloads or a system OCR binary like Tesseract.
 - **Speaker focus assumes Speaker View** (whoever's talking auto-enlarges to
   the main tile), which is the default or a one-click switch in Zoom/Teams. In
   Gallery View, all tiles are equal-sized, so the "largest face" heuristic has
   no signal to go on and may pick the wrong person.
-- **Self-filtering is not yet built**: the tool will narrate you too if you're
-  the detected speaker. Since enrollment/identification already exists, adding
-  "stay silent when the speaker matches my own enrolled name" is a small next
-  step, not a new subsystem.
+- **Name-label reading is a proximity heuristic**: it picks whichever text
+  Vision finds just below (and not too far right of) the speaker's face, since
+  call apps anchor the name to a tile's bottom-left corner regardless of where
+  the face sits within it. Works well for one tile filling most of the frame;
+  in a dense Gallery View it can occasionally grab a neighboring tile's label.
+- **Self-filtering depends on the call app rendering a "(you)" marker.** Some
+  apps/clients don't (e.g. Zoom's web client shows your name with no such
+  marker), in which case it narrates you like anyone else -- there is no
+  visual cue to key off in that case.
