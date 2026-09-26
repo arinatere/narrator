@@ -101,6 +101,22 @@ python emotion_narrator.py --headless
 python emotion_narrator.py --source window --app zoom.us --headless
 ```
 
+### Interactive mode (keypress-controlled, spoken confirmations)
+```bash
+python emotion_narrator.py --source window --app zoom.us --interactive
+```
+Launches and waits rather than narrating immediately -- entirely keyboard and
+voice driven, no video window, no mouse needed:
+- On launch, it speaks: *"Narrator is ready. Press space to start. Press q to
+  stop."*
+- **Space** starts narration in the background and it speaks: *"Accessibility
+  descriptions enabled."*
+- **Q** stops it, speaks a confirmation, and exits.
+
+Keys are read only while this terminal window has focus (standard terminal
+input, via Python's `termios`/`tty` -- no extra dependency, no special OS
+permission, unlike a true system-wide hotkey).
+
 ## Notes
 
 - `--camera-index` (default `1`) selects which webcam device to use in
