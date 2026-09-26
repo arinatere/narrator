@@ -3,7 +3,9 @@ into audio a blind/low-vision user can pick up without looking at anything.
 
 Source is either a local webcam or a live capture of a call window (Zoom, Teams,
 FaceTime, ...), so it can also narrate a remote participant's expression during
-a call. See README.md for setup and permissions.
+a call. In a multi-person call, the largest detected face is treated as the
+active speaker (Speaker View auto-enlarges whoever's talking) and everyone else
+is ignored -- see README.md for the Gallery View caveat and setup/permissions.
 """
 
 import argparse
@@ -75,26 +77,32 @@ def main():
             frame_count += 1
             if frame_count % FRAME_SKIP == 0:
                 try:
-                    result = DeepFace.analyze(
+                    results = DeepFace.analyze(
                         frame,
                         actions=['emotion'],
                         enforce_detection=False,
                         detector_backend='opencv',
                         silent=True,
                     )
-                    if isinstance(result, list):
-                        result = result[0]
+                    if not isinstance(results, list):
+                        results = [results]
 
-                    face_confidence = result.get('face_confidence', 1.0)
-                    dominant = result['dominant_emotion']
+                    # analyze() returns one entry per detected face. In a multi-person
+                    # call the active speaker's tile is usually the largest one on
+                    # screen (Speaker View auto-enlarges whoever's talking), so treat
+                    # the largest detected face as the speaker and ignore the rest.
+                    speaker = max(results, key=lambda r: r['region']['w'] * r['region']['h'])
+
+                    face_confidence = speaker.get('face_confidence', 1.0)
+                    dominant = speaker['dominant_emotion']
                     if face_confidence < MIN_FACE_CONFIDENCE:
                         # Not confident a face was even found -- don't relay a guess
                         # the listener has no way to visually double-check.
                         current_emotion = None
                     else:
                         current_emotion = dominant
-                        current_confidence = result['emotion'][dominant]
-                    last_box = result['region']
+                        current_confidence = speaker['emotion'][dominant]
+                    last_box = speaker['region']
                 except Exception as e:
                     current_emotion = None
                     print(f"[DEBUG] Detection error: {e}")

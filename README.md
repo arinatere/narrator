@@ -21,6 +21,10 @@ call -- and relays what it sees through sound:
   stands out from routine happy/neutral drift -- similar in spirit to
   noticing when an AI agent needs your attention.
 - A **spoken sentence** ("She looks happy") after the earcon, for full detail.
+- **Speaker focus** in multi-person calls: the largest detected face is treated
+  as the active speaker and everyone else is ignored, so a busy call doesn't
+  turn into a wall of narration. (Currently narrates whoever is speaking,
+  including you -- self-filtering is a planned next step, see Notes.)
 
 ## Setup
 
@@ -84,3 +88,12 @@ python emotion_narrator.py --source window --app zoom.us --headless
   `MIN_FACE_CONFIDENCE`) are at the top of `emotion_narrator.py`.
 - Earcon waveforms and the concerning-emotion set live in `audio_cues.py`;
   capture logic lives in `capture.py`.
+- **Speaker focus assumes Speaker View** (whoever's talking auto-enlarges to
+  the main tile), which is the default or a one-click switch in Zoom/Teams. In
+  Gallery View, all tiles are equal-sized, so the "largest face" heuristic has
+  no signal to go on and may pick the wrong person.
+- **Self-filtering is not yet built**: the tool currently narrates whoever it
+  identifies as the speaker, including you. The planned approach is a
+  one-time face enrollment (look at your webcam once at startup, store the
+  face embedding via DeepFace) and skip narration when the speaker's face
+  matches it.
