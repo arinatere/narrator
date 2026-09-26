@@ -15,6 +15,7 @@ import cv2
 from deepface import DeepFace
 
 import audio_cues
+import people
 from capture import WebcamCapture, WindowCapture
 
 FRAME_SKIP = 5               # only run detection every 5th frame
@@ -35,6 +36,14 @@ def parse_args():
                          "--source window, e.g. 'zoom.us', 'Teams', 'FaceTime'.")
     p.add_argument("--headless", action="store_true",
                     help="Don't open a video window -- audio only. Quit with Ctrl+C.")
+    p.add_argument("--name", type=str, default="The speaker",
+                    help="Fallback label used in narration when the current "
+                         "speaker isn't a recognized, enrolled face (default: "
+                         "'The speaker'). See --enroll to register real names.")
+    p.add_argument("--enroll", type=str, default=None, metavar="NAME",
+                    help="Enroll a person instead of running detection: grabs a "
+                         "reference frame from --source (point it at their face "
+                         "first) and stores it under NAME for future narration.")
     args = p.parse_args()
     if args.source == "window" and not args.app:
         p.error("--source window requires --app <substring>, e.g. --app zoom.us")
@@ -47,13 +56,48 @@ def make_capture(args):
     return WindowCapture(args.app)
 
 
+def crop_region(frame, region, pad_ratio=0.2):
+    """Crop `region` (a DeepFace 'region' dict) out of `frame` with a bit of
+    padding, for a cleaner face-identification embedding than a tight box."""
+    x, y, w, h = region['x'], region['y'], region['w'], region['h']
+    pad_x, pad_y = int(w * pad_ratio), int(h * pad_ratio)
+    y0, y1 = max(0, y - pad_y), min(frame.shape[0], y + h + pad_y)
+    x0, x1 = max(0, x - pad_x), min(frame.shape[1], x + w + pad_x)
+    return frame[y0:y1, x0:x1]
+
+
+def run_enroll(args):
+    cap = make_capture(args)
+    try:
+        frame = None
+        for _ in range(10):  # let the source warm up (webcam exposure, window focus)
+            ret, f = cap.read()
+            if ret:
+                frame = f
+            time.sleep(0.1)
+    finally:
+        cap.release()
+
+    if frame is None:
+        print("Could not capture a frame to enroll from.")
+        return
+    people.enroll(args.enroll, frame)
+    print(f"Enrolled '{args.enroll}'. Known speakers: {', '.join(people.known_names())}")
+
+
 def main():
     args = parse_args()
+    if args.enroll:
+        run_enroll(args)
+        return
+
     cap = make_capture(args)
+    identifier = people.Identifier()
 
     frame_count = 0
     current_emotion = None
     current_confidence = 0.0
+    current_subject = args.name
     last_box = None
 
     pending_emotion = None      # the emotion currently being observed
@@ -62,6 +106,11 @@ def main():
     last_speak_time = 0
 
     print("(First run may take ~30 seconds while DeepFace downloads its model)")
+    if identifier.has_known_faces():
+        print(f"Known speakers: {', '.join(people.known_names())}")
+    else:
+        print("No speakers enrolled yet -- run with --enroll NAME to add one. "
+              f"Unrecognized speakers will be called '{args.name}'.")
     if args.headless:
         print("Running headless -- audio only. Press Ctrl+C to quit.")
     else:
@@ -102,6 +151,11 @@ def main():
                     else:
                         current_emotion = dominant
                         current_confidence = speaker['emotion'][dominant]
+                        if identifier.has_known_faces():
+                            matched_name = identifier.identify(crop_region(frame, speaker['region']))
+                            current_subject = matched_name if matched_name else args.name
+                        else:
+                            current_subject = args.name
                     last_box = speaker['region']
                 except Exception as e:
                     current_emotion = None
@@ -128,7 +182,7 @@ def main():
                 audio_cues.announce(
                     pending_emotion,
                     current_confidence,
-                    phrase=f"She looks {pending_emotion}",
+                    phrase=f"{current_subject} looks {pending_emotion}",
                     escalate=escalate,
                 )
                 last_announced = pending_emotion

@@ -20,11 +20,12 @@ call -- and relays what it sees through sound:
   emotion (angry/sad/fear/disgust) from a non-concerning one, so that moment
   stands out from routine happy/neutral drift -- similar in spirit to
   noticing when an AI agent needs your attention.
-- A **spoken sentence** ("She looks happy") after the earcon, for full detail.
+- A **spoken sentence** ("Alex looks happy") after the earcon, for full detail
+  -- using a real enrolled name when the speaker is recognized (see Named
+  speakers below), or a fallback label otherwise.
 - **Speaker focus** in multi-person calls: the largest detected face is treated
   as the active speaker and everyone else is ignored, so a busy call doesn't
-  turn into a wall of narration. (Currently narrates whoever is speaking,
-  including you -- self-filtering is a planned next step, see Notes.)
+  turn into a wall of narration.
 
 ## Setup
 
@@ -64,6 +65,24 @@ with any video call app without API keys or app review.
   Settings > Privacy & Security > Screen Recording) -- grant it to your
   terminal (or the app running Python), then restart the script.
 
+### Named speakers
+By default the narration calls whoever it detects "The speaker". To get real
+names, enroll each person once -- point the source at their face (e.g. while
+they're the visible speaker in the call), then:
+```bash
+python emotion_narrator.py --source window --app zoom.us --enroll Alex
+```
+This grabs a reference frame, stores a face embedding for "Alex" locally in
+`known_faces.json` (never committed -- it's gitignored, since it's personal
+biometric data), and exits. Repeat for each person you want recognized. On
+future runs, any detected speaker matching an enrolled face is called by that
+name; an unrecognized speaker falls back to `--name <label>` (default: "The
+speaker").
+```bash
+python emotion_narrator.py --source window --app zoom.us --headless
+python emotion_narrator.py --source window --app zoom.us --headless --name "Someone new"
+```
+
 ### Headless (audio only, no window)
 Add `--headless` to either mode above. No video window opens at all; quit
 with Ctrl+C. This is the intended mode for a blind/low-vision user, since it
@@ -87,13 +106,14 @@ python emotion_narrator.py --source window --app zoom.us --headless
 - Tuning constants (`FRAME_SKIP`, `HOLD_SECONDS`, `COOLDOWN_SECONDS`,
   `MIN_FACE_CONFIDENCE`) are at the top of `emotion_narrator.py`.
 - Earcon waveforms and the concerning-emotion set live in `audio_cues.py`;
-  capture logic lives in `capture.py`.
+  capture logic lives in `capture.py`; face enrollment/identification lives
+  in `people.py` (embeddings via DeepFace's Facenet model, matched by cosine
+  distance -- no extra dependencies).
 - **Speaker focus assumes Speaker View** (whoever's talking auto-enlarges to
   the main tile), which is the default or a one-click switch in Zoom/Teams. In
   Gallery View, all tiles are equal-sized, so the "largest face" heuristic has
   no signal to go on and may pick the wrong person.
-- **Self-filtering is not yet built**: the tool currently narrates whoever it
-  identifies as the speaker, including you. The planned approach is a
-  one-time face enrollment (look at your webcam once at startup, store the
-  face embedding via DeepFace) and skip narration when the speaker's face
-  matches it.
+- **Self-filtering is not yet built**: the tool will narrate you too if you're
+  the detected speaker. Since enrollment/identification already exists, adding
+  "stay silent when the speaker matches my own enrolled name" is a small next
+  step, not a new subsystem.
