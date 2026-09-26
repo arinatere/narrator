@@ -59,15 +59,22 @@ def recognize_text_blocks(frame, min_confidence=0.3):
     return blocks
 
 
-def find_name_near_face(frame, face_region, max_vertical_gap=180, horizontal_margin=40):
+def find_name_near_face(frame, face_region, max_vertical_gap=None, horizontal_margin=40):
     """Finds the text block that most plausibly labels `face_region`. Call apps
     overlay a participant's display name at the bottom-LEFT of their tile --
     not centered under wherever their face happens to be within it -- so this
     looks below the face and anywhere from the frame's left edge out to just
     past the face's right edge, picking the closest such match vertically.
     Returns (name, is_self) where `is_self` is True if the label contains a
-    "(you)" marker, or (None, False) if nothing nearby looks like a name."""
+    "(you)" marker, or (None, False) if nothing nearby looks like a name.
+
+    `max_vertical_gap` defaults to 40% of the frame height: the face-detector's
+    box size (and so its distance to the tile's bottom-anchored label) varies a
+    lot frame to frame -- a fixed pixel cap missed real labels in testing -- so
+    this scales with the capture instead of being a fixed pixel count."""
     fx, fy, fw, fh = face_region["x"], face_region["y"], face_region["w"], face_region["h"]
+    if max_vertical_gap is None:
+        max_vertical_gap = frame.shape[0] * 0.4
     face_bottom = fy + fh
     right_bound = fx + fw + horizontal_margin
 
@@ -89,4 +96,8 @@ def find_name_near_face(frame, face_region, max_vertical_gap=180, horizontal_mar
     # Strip stray icon glyphs OCR sometimes merges in from an adjacent mute/video
     # icon (e.g. "% Arina Te" -> "Arina Te").
     name = re.sub(r"^[^A-Za-z0-9]+", "", name).strip(" -,")
+    # A muted-mic icon is also sometimes misread as a short run of lowercase
+    # letters glued onto the front of the name (e.g. "will Lyaila", "ll Lyaila")
+    # -- drop a short lowercase word immediately before a capitalized one.
+    name = re.sub(r"^[a-z]{1,5}\s+(?=[A-Z])", "", name).strip()
     return (name or None), is_self
