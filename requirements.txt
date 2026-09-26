@@ -5,3 +5,5 @@ tf-keras>=2.16,<2.17
 mss>=9.0
 pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"
 pyobjc-framework-Vision>=10.0; sys_platform == "darwin"
+rumps>=0.4.0; sys_platform == "darwin"
+pynput>=1.7
