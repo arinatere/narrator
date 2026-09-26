@@ -9,13 +9,7 @@ is ignored -- see README.md for the Gallery View caveat and setup/permissions.
 """
 
 import argparse
-import select
-import subprocess
-import sys
-import termios
-import threading
 import time
-import tty
 
 import cv2
 from deepface import DeepFace
@@ -51,12 +45,6 @@ def parse_args():
                     help="Enroll a person instead of running detection: grabs a "
                          "reference frame from --source (point it at their face "
                          "first) and stores it under NAME for future narration.")
-    p.add_argument("--interactive", action="store_true",
-                    help="Wait for a keypress instead of starting immediately: Space "
-                         "starts narration in the background, Q stops and exits. "
-                         "Runs headless (no video window) with spoken confirmations "
-                         "at each step. Keys are only read while this terminal has "
-                         "focus -- no special OS permission needed.")
     args = p.parse_args()
     if args.source == "window" and not args.app:
         p.error("--source window requires --app <substring>, e.g. --app zoom.us")
@@ -98,12 +86,11 @@ def run_enroll(args):
     print(f"Enrolled '{args.enroll}'. Known speakers: {', '.join(people.known_names())}")
 
 
-def run_narrator(args, stop_event=None):
-    """Runs the detection loop until `stop_event` is set (or, with no
-    stop_event, until Ctrl+C / 'q' in the video window). `stop_event` lets
-    run_interactive() below stop this cooperatively from a keypress instead."""
-    if stop_event is None:
-        stop_event = threading.Event()
+def main():
+    args = parse_args()
+    if args.enroll:
+        run_enroll(args)
+        return
 
     cap = make_capture(args)
     identifier = people.Identifier()
@@ -134,7 +121,7 @@ def run_narrator(args, stop_event=None):
         print("Press 'q' in the video window to quit.")
 
     try:
-        while not stop_event.is_set():
+        while True:
             ret, frame = cap.read()
             if not ret:
                 print("Could not read a frame from the source.")
@@ -230,59 +217,6 @@ def run_narrator(args, stop_event=None):
         cap.release()
         if not args.headless:
             cv2.destroyAllWindows()
-
-
-def _read_key(timeout=0.2):
-    """Returns one character read from stdin if available within `timeout`
-    seconds, else None. Only sees keys while this terminal is focused --
-    unlike a global hotkey, this needs no special OS permission."""
-    ready, _, _ = select.select([sys.stdin], [], [], timeout)
-    return sys.stdin.read(1) if ready else None
-
-
-def run_interactive(args):
-    """Space starts narration in the background; Q stops it and exits. Runs
-    headless regardless of --headless, since a video window has no place in
-    a keypress-driven, audio-only workflow."""
-    args.headless = True
-    subprocess.run(["say", "Narrator is ready. Press space to start. Press q to stop."])
-    print("Narrator is ready. Press Space to start. Press Q to stop.")
-
-    stop_event = threading.Event()
-    thread = None
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setcbreak(fd)
-        while True:
-            key = _read_key()
-            if key is None:
-                continue
-            if key == " ":
-                if thread and thread.is_alive():
-                    continue
-                subprocess.run(["say", "Accessibility descriptions enabled."])
-                stop_event = threading.Event()
-                thread = threading.Thread(target=run_narrator, args=(args, stop_event), daemon=True)
-                thread.start()
-            elif key.lower() == "q":
-                if thread and thread.is_alive():
-                    stop_event.set()
-                    thread.join(timeout=2)
-                subprocess.run(["say", "Narrator stopped."])
-                break
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-
-def main():
-    args = parse_args()
-    if args.enroll:
-        run_enroll(args)
-    elif args.interactive:
-        run_interactive(args)
-    else:
-        run_narrator(args)
 
 
 if __name__ == "__main__":
