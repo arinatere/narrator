@@ -92,12 +92,20 @@ def find_name_near_face(frame, face_region, max_vertical_gap=None, horizontal_ma
         return None, False
 
     is_self = bool(_YOU_SUFFIX.search(best_text))
-    name = _YOU_SUFFIX.sub("", best_text)
-    # Strip stray icon glyphs OCR sometimes merges in from an adjacent mute/video
-    # icon (e.g. "% Arina Te" -> "Arina Te").
-    name = re.sub(r"^[^A-Za-z0-9]+", "", name).strip(" -,")
-    # A muted-mic icon is also sometimes misread as a short run of lowercase
-    # letters glued onto the front of the name (e.g. "will Lyaila", "ll Lyaila")
-    # -- drop a short lowercase word immediately before a capitalized one.
-    name = re.sub(r"^[a-z]{1,5}\s+(?=[A-Z])", "", name).strip()
-    return (name or None), is_self
+    name = _clean_name(_YOU_SUFFIX.sub("", best_text))
+    return name, is_self
+
+
+def _clean_name(text):
+    """A mute/status icon beside the name gets OCR'd as noise attached to it,
+    inconsistently -- observed as "%", "will", "ll", "all %", "/", etc. Rather
+    than pattern-match each variant, strip a leading glued-on symbol, then take
+    from the first capitalized word onward (real display names start with a
+    capital letter; the icon noise never does). Returns None if no such word
+    is found."""
+    text = re.sub(r"^[^A-Za-z0-9]+", "", text).strip(" -,")
+    tokens = text.split()
+    for i, token in enumerate(tokens):
+        if token[:1].isupper():
+            return " ".join(tokens[i:])
+    return None
